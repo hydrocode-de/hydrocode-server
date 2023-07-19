@@ -1,7 +1,6 @@
 from typing import Optional, Union
 from dataclasses import dataclass
 import re
-import os
 
 from fabric import Connection
 
@@ -9,7 +8,6 @@ from fabric import Connection
 @dataclass
 class HydrocodeServer(object):
     connection: Optional[Union[Connection, str]] = None
-    supabase_location: Optional[str] = os.path.expanduser('~')
 
     def __post_init__(self):
         # set connection to localhost if None
@@ -52,3 +50,6 @@ class HydrocodeServer(object):
 
         # return
         return info
+
+    def supabase(self, project: str):
+        pass
