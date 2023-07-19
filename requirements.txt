@@ -1,1 +1,5 @@
 fabric
+pyjwt
+pyyaml
+typing_extensions
+requests
