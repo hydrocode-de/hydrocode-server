@@ -8,11 +8,10 @@ from string import ascii_letters, digits
 from random import choice
 import re
 import yaml
-import socket
 
 import jwt
 
-from .server import HydrocodeServer
+from hserv.server import HydrocodeServer
 
 @dataclass
 class SupabaseController(object):
