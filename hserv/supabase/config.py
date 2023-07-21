@@ -1,14 +1,30 @@
+from typing import Dict, List, Union, TYPE_CHECKING
 from dataclasses import dataclass, field
 import os
 import io
+import re
+import yaml
 
-from .controller import SupabaseController
+if TYPE_CHECKING:
+    from .controller import SupabaseController
 
 
+ENV_LOOKUP: Dict[str, List[str]] = dict(
+    pg_password=["POSTGRES_PASSWORD"],
+    jwt_secret=["JWT_SECRET"],
+    anon_jwt=["ANON_KEY"],
+    service_jwt=["SERVICE_ROLE_KEY"],
+    public_url=["SITE_URL"],
+    site_url=["SITE_URL"],
+    api_url=["SUPABASE_PUBLIC_URL", "API_EXTERNAL_URL"],
+    pg_port=["POSTGRES_PORT"],
+    public_port=["STUDIO_PORT"],
+    api_port=["KONG_HTTP_PORT"],
+)
 
 @dataclass
 class SupabaseConfig:
-    controller: SupabaseController = field(repr=False)
+    controller: 'SupabaseController' = field(repr=False)
 
     def __post_init__(self):
         # set the paths to the relevant config files
@@ -25,43 +41,59 @@ class SupabaseConfig:
 
         # set as attributes
         self._env = envBuf.getvalue()
-        self._kong = kongBuf.getvalue()
+        self._kong = yaml.load(kongBuf, Loader=yaml.FullLoader)
 
     def save(self):
         # load the current config into buffers
         envBuf = io.StringIO(self._env)
-        kongBuf = io.StringIO(self._kong)
+        kongBuf = io.StringIO()
+        yaml.dump(self._kong, kongBuf)
 
         # send to the server
         self.controller.server.put(envBuf, self._env_path)
         self.controller.server.put(kongBuf, self._kong_path)
 
-
     def __getattr__(self, name: str):
-        if name in self._env:
-            return 'Found in ENV'
-        elif name in self._kong:
-            return 'Found in KONG'
+        # first check if name is in the lookup table
+        if name in ENV_LOOKUP:
+            names = ENV_LOOKUP[name]
         else:
-            raise AttributeError(F"The configuration value '{name}' is not kwown.")
+            names = [name]
+
+        # use only the first, as all have the same value
+        name = names[0]
+
+        # extract
+        regex = re.search(r'%s=(.+)[\n\r]' % name, self._env)
+        if regex is None:
+            raise AttributeError(f"Attriubte '{name}' is not a valid environment configuration value.")
+        else:
+            return regex.group(1)
 
     def get(self, name: str, default=None):
         try:
             return getattr(self, name)
         except AttributeError:
             return default
+    
+    def __setattr__(self, name: str, value: Union[str, int]):
+        # make a list first
+        if name in ENV_LOOKUP:
+            names = ENV_LOOKUP[name]
+        else:
+            names = [name]
         
+        # check that all names are in the env
+        if not all([n in self._env for n in names]):
+            super().__setattr__(name, value)
+            return 
         
-
-    # def __setattr__(self, name, value):
-    #     if name in ["path", "mode", "_config"]:
-    #         super().__setattr__(name, value)
-    #     else:
-    #         self._config[name] = value
-
-    # def __delattr__(self, name):
-    #     if name in self._config:
-    #         del self._config[name]
-    #     else:
-    #         raise AttributeError(f"'SupabaseConfig' object has no attribute '{name}'")
-
+        # still here means replace the config
+        env = self._env
+        for n in names:
+            # get the current value
+            current_val = getattr(self, n)
+            env.replace(f"{n}={current_val}", f"{n}={value}")
+        
+        # finally set the new env
+        self._env = env
