@@ -1,16 +1,17 @@
-from typing import Union, Optional, cast
+from typing import Union, Optional, cast, Callable, Any
 from dataclasses import dataclass
 import re
 import io
 import os
 import shutil
 
-from fabric import Connection
+from fabric import Connection, Result
 
 
 @dataclass
 class HydrocodeServer(object):
     connection: str = 'localhost'
+
 
     @property
     def run(self):
@@ -22,7 +23,11 @@ class HydrocodeServer(object):
         # create a local wrapper
         def _run_local(*args, **kwargs):
             with Connection(self.connection) as con:
-                return con.local(*args, **kwargs)
+                res = con.local(*args, **kwargs)
+                if res is None:
+                    return Result(connection=con)
+                else:
+                    return res
 
         # check which one to use
         if 'localhost' in self.connection:
@@ -88,6 +93,18 @@ class HydrocodeServer(object):
             return _get_local
         else:
             return _get                
+
+    def exists(self, path: str) -> bool:
+        # create the remote wrapper
+        res = self.run(f"python -c \"import os; print(os.path.exists('{path}'))\"", hide=True)
+        return bool(res.stdout)
+
+    @property
+    def cwd(self):
+        return self.run("pwd", hide=True).stdout
+
+    def cp(self, src: str, dst: str):
+        self.run(f"cp {src} {dst}", hide=True)
 
     def _extract_semver(self, command: str) -> str:
         # get git version
