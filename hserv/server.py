@@ -118,7 +118,7 @@ class HydrocodeServer(object):
         return info
     
     def get_free_port(self) -> int:
-        cmd = "import socket; s = socket.socket(); s.bind(('', 0)); print(s.getsockname()[1]); s.close()"
+        cmd = "python -c \"import socket; s = socket.socket(); s.bind(('', 0)); print(s.getsockname()[1]); s.close()\""
 
         res = self.run(cmd, hide='both')
         return int(res.stdout)
