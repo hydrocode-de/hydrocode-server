@@ -1,5 +1,5 @@
-from typing import Union, Optional, cast,  Any
-from dataclasses import dataclass
+from typing import Union, Optional, cast, Dict, Any, TYPE_CHECKING
+from dataclasses import dataclass, field
 import re
 import io
 import os
@@ -7,17 +7,20 @@ import shutil
 
 from fabric import Connection, Result
 
+if TYPE_CHECKING:
+    from hserv.supabase.controller import SupabaseController
 
 @dataclass
 class HydrocodeServer(object):
     connection: str = 'localhost'
-
+    username: Optional[str] = None
+    _supabase_projects: Dict[str, 'SupabaseController'] = field(default_factory=dict, init=False)
 
     @property
     def run(self):
         # create a remote warpper            
         def _run(*args, **kwargs):
-            with Connection(self.connection) as con:
+            with Connection(self.connection, user=self.username) as con:
                 return con.run(*args, **kwargs)
         
         # create a local wrapper
@@ -140,5 +143,20 @@ class HydrocodeServer(object):
         res = self.run(cmd, hide='both')
         return int(res.stdout)
 
-    def supabase(self, project: str):
-        pass
+    def supabase(self, project: str, **kwargs) -> 'SupabaseController':
+        # check if we have an instance of that project
+        if project in self._supabase_projects:
+            return self._supabase_projects[project]
+        else:
+            # initialize a new supabase controller
+            from hserv.supabase.controller import SupabaseController
+
+            # update the kwargs
+            kwargs['public_url'] = self.connection
+            controller = SupabaseController(project, **kwargs)
+
+            # cache the controller
+            self._supabase_projects[project] = controller
+
+            # return
+            return controller
