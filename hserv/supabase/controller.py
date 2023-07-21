@@ -13,6 +13,7 @@ import jwt
 
 from hserv.server import HydrocodeServer
 
+
 @dataclass
 class SupabaseController(object):
     project: str
@@ -68,7 +69,7 @@ class SupabaseController(object):
         
     def start(self):
         # check that docker is installed and running
-        if not self.server.info.get('docker_version', 'unknown') == 'unknown':
+        if self.server.info.get('docker_version', 'unknown') == 'unknown':
             raise RuntimeError("Docker is not installed on the server.")
 
         # store the current working directory
