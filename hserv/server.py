@@ -1,4 +1,4 @@
-from typing import Union, Optional, cast, Callable, Any
+from typing import Union, Optional, cast,  Any
 from dataclasses import dataclass
 import re
 import io
