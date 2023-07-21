@@ -2,16 +2,16 @@ from typing import Union, Optional
 from typing_extensions import Literal
 from dataclasses import dataclass, field
 import os
-import shutil
 import json
 from string import ascii_letters, digits
 from random import choice
 import re
-import yaml
+import io
 
 import jwt
 
 from hserv.server import HydrocodeServer
+from hserv.supabase.config import SupabaseConfig
 
 
 @dataclass
@@ -40,11 +40,11 @@ class SupabaseController(object):
         self.docker_path = os.path.join(self.path, 'supabase', 'docker')
 
         # check that the path exists
-        if not os.path.exists(self.path):
-            os.makedirs(self.path)
+        if not self.server.exists(self.path):
+            self.server.run(f"mkdir -p {self.path}", hide=True)
 
         # check that the config exists
-        if not os.path.exists(os.path.join(self.path, '.config')):
+        if not self.server.exists(os.path.join(self.path, '.config')):
             # generate a secret key
             secret = "".join([choice(ascii_letters + digits) for i in range(64)])
             pw = "".join([choice(ascii_letters + digits) for i in range(64)])
@@ -54,15 +54,15 @@ class SupabaseController(object):
             kong_port = self.server.get_free_port()
 
             # create a config file for the project
-            with open(os.path.join(self.path, '.config'), 'w') as f:
-                json.dump(dict(
+            configBuf = io.StringIO(json.dumps(dict(
                     public_url=self.public_url,
                     jwt_secret=secret,
                     postgres_password=pw,
                     public_port=self.public_port,
                     postgres_port=pg_port,
                     kong_port=kong_port,
-                ), f)
+                )))
+            self.server.put(configBuf, os.path.join(self.path, '.config'))
             
         # read from config
         self.reload_config()
@@ -72,34 +72,15 @@ class SupabaseController(object):
         if self.server.info.get('docker_version', 'unknown') == 'unknown':
             raise RuntimeError("Docker is not installed on the server.")
 
-        # store the current working directory
-        cwd = os.getcwd()
-
-        # switch to the docker path
-        os.chdir(self.docker_path)
-
         # run docker compose up
-        self.server.run('docker compose up -d', hide=self.quiet)
-
-        # switch back to the working directory
-        os.chdir(cwd)
+        self.server.run(f"cd {self.docker_path}; docker compose up -d", hide=self.quiet)
 
     def stop(self):
         # check that docker is installed and running
-        if not self.server.info.get('docker_version', 'unknown') == 'unknown':
+        if self.server.info.get('docker_version', 'unknown') == 'unknown':
             raise RuntimeError("Docker is not installed on the server.")
-        
-        # store the current working directory
-        cwd = os.getcwd()
-
-        # switch to the docker path
-        os.chdir(self.docker_path)
-
         # stop the compose project
-        self.server.run('docker compose down', hide=self.quiet)
-
-        # switch back to the working directory
-        os.chdir(cwd)
+        self.server.run(f"cd {self.docker_path}; docker compose down", hide=self.quiet)
 
     def setup(self, public_port: Optional[int] = None, kong_port: Optional[int] = None, postgres_port: Optional[int] = None):
         # if not downloaded, do that
@@ -130,40 +111,39 @@ class SupabaseController(object):
         # check that docker is installed
         if self.server.info.get('docker_version', 'unknown') == 'unknown':
             raise RuntimeError("Docker is not installed on the server.")
-        
-        # store the current working directory
-        cwd = os.getcwd()
-
-        # switch to the project path
-        os.chdir(os.path.join(self.path, 'supabase'))
 
         # run the git pull command
-        self.server.run('git pull', hide=self.quiet)
+        self.server.run(f"cd {os.path.join(self.path, 'supabase')}; git pull", hide=self.quiet)
 
         # if we need to rewrite the condig, do that
         if rewrite_config:
             self.update_supabase_config(jwt=True, postgres=True, domain=True)
 
-        # switch to the docker path
-        os.chdir(self.docker_path)
-
         # run docker compose up
         # TODO before running this, check if the containers are running
-        self.server.run('docker compose up -d', hide=self.quiet)
+        self.server.run(f"cd {self.docker_path}; docker compose up -d", hide=self.quiet)
 
-        # switch back to the working directory
-        os.chdir(cwd)
+    def remove(self):
+        # first stop the docker service
+        self.stop()
+
+        # remove the path
+        self.server.run(f"rm -rf {self.path}")
 
     @property
     def config(self) -> dict:
-        with open(os.path.join(self.path, '.config')) as f:
-            return json.load(f)
+        # load the config into memory
+        confBuf = io.StringIO()
+        self.server.get(os.path.join(self.path, '.config'), confBuf)
+        return json.loads(confBuf.getvalue())
     
     @config.setter
     def config(self, value: dict):
-        # write the config
-        with open(os.path.join(self.path, '.config'), 'w') as f:
-            json.dump(value, f)
+        # load the config dict into a buffer object
+        confBuf = io.StringIO(json.dumps(value))
+
+        # put the config to the server
+        self.server.put(confBuf, os.path.join(self.path, '.config'))
 
     def reload_config(self):
         # get the config
@@ -179,13 +159,16 @@ class SupabaseController(object):
     @property
     def is_downloaded(self):
         # check if the supabase docker folder exists
-        return os.path.exists(os.path.join(self.path, 'supabase', 'docker'))
+        return self.server.exists(os.path.join(self.path, 'supabase', 'docker'))
     
     @property
     def is_configured(self):
         # get the env file
-        with open(os.path.join(self.docker_path, '.env')) as f:
-            conf = f.read()
+        envBuf = io.StringIO()
+        self.server.get(os.path.join(self.docker_path, '.env'), envBuf)
+        
+        # get the conf as string
+        conf = envBuf.getvalue()
         
         # make sure the passwords match
         return self.pg_password in conf and self.jwt_secret in conf
@@ -204,26 +187,20 @@ class SupabaseController(object):
     
         if not self.quiet:
             print(f"Initializing new project at: {self.path}")
-    
-        # get the current working directory
-        cwd = os.getcwd()
 
-        # switch to the project path
-        os.chdir(self.path)
+        # build the command
+        cloneCmd = f"cd {self.path}; git clone --depth 1 https://github.com/supabase/supabase"
 
         # run git to clone the supabase repo
-        self.server.run('git clone --depth 1 https://github.com/supabase/supabase', hide=self.quiet)
+        self.server.run(cloneCmd, hide=self.quiet)
 
         # copy over the example env file
         src = os.path.join(self.docker_path, '.env.example')
         dst = os.path.join(self.docker_path, '.env')
-        shutil.copyfile(src, dst)
+        self.server.cp(src, dst)
 
         if not self.quiet:
             print(f"Supabase downloaded.\nCreated config file at: {dst}")
-
-        # set back the working directory
-        os.chdir(cwd)
 
     def generate_jwt(self, role: Union[Literal['anon'], Literal['service_role']]) -> str:
         # create the payload
@@ -237,36 +214,26 @@ class SupabaseController(object):
         return encoded_jwt
 
     def update_supabase_config(self, jwt=False, postgres=False, domain=False):
-        # load the config
-        with open(os.path.join(self.docker_path, '.env')) as f:
-            conf = f.read()
-
-        with open(os.path.join(self.docker_path, 'volumes', 'api', 'kong.yml')) as f:
-            kong = yaml.load(f, Loader=yaml.FullLoader)
-
+        # instantiate a Config object
+        conf = SupabaseConfig(self)
+        
         # update the postgres password
         if postgres:
-            # find the current password
-            old_pw = re.search(r'POSTGRES_PASSWORD=(.+)[\n\r]', conf).group(1)
-            conf = conf.replace(old_pw, self.pg_password)
-
-            # find the current port
-            old_port = re.search(r'POSTGRES_PORT=(.+)[\n\r]', conf).group(1)
-            conf = conf.replace(old_port, str(self.pg_port))
+            # set the password
+            conf.pg_password = self.pg_password
+            conf.pg_port = self.pg_port
         
         # update the jwt secret
         if jwt:
             # replace jwt secret
-            old_jwt = re.search(r'JWT_SECRET=(.+)[\n\r]', conf).group(1)
-            conf = conf.replace(old_jwt, self.jwt_secret)
+            conf.jwt_secret = self.jwt_secret
 
             # repalce the api keys in the environment file
-            anon_key = re.search(r'ANON_KEY=(.+)[\n\r]', conf).group(1)
-            service_key = re.search(r'SERVICE_ROLE_KEY=(.+)[\n\r]', conf).group(1)
-            conf = conf.replace(anon_key, self.generate_jwt('anon'))
-            conf = conf.replace(service_key, self.generate_jwt('service_role'))
+            conf.anon_jwt = self.generate_jwt('anon')
+            conf.service_jwt = self.generate_jwt('service_role')
 
             # replace the keys in the API config
+            kong = conf._kong
             anon = [c for c in kong['consumers'] if c['username'] == 'anon'][0]
             anon['keyauth_credentials'] = [{"key": self.generate_jwt('anon')}]
 
@@ -276,27 +243,14 @@ class SupabaseController(object):
         
         if domain:
             # replace the domain
-            old_domain = re.search(r'SITE_URL=(.+)[\n\r]', conf).group(1)
-            conf = conf.replace(old_domain, self.site_url)
-            old_sub_url = re.search(r'SUPABASE_PUBLIC_URL=(.+)[\n\r]', conf).group(1)
-            conf = conf.replace(old_sub_url, f"{self.public_url}:{self.kong_port}")
+            conf.site_url = self.site_url
 
             # replace API url
-            old_ext_api = re.search(r'API_EXTERNAL_URL=(.+)[\n\r]', conf).group(1)
-            conf = conf.replace(old_ext_api, f"{self.public_url}:{self.kong_port}")
+            conf.api_url = f"{self.public_url}:{self.kong_port}"
 
             # replace ports
-            old_kong_port = re.search(r'KONG_HTTP_PORT=(.+)[\n\r]', conf).group(1)
-            conf = conf.replace(old_kong_port, str(self.kong_port))
-            old_public_port = re.search(r'STUDIO_PORT=(.+)[\n\r]', conf).group(1)
-            conf = conf.replace(old_public_port, str(self.public_port))
-            
-        # write back the config
-        with open(os.path.join(self.docker_path, '.env'), 'w') as f:
-            f.write(conf)
-        
-        with open(os.path.join(self.docker_path, 'volumes', 'api', 'kong.yml'), 'w') as f:
-            yaml.dump(kong, f)
+            conf.api_port = self.kong_port
+            conf.public_port = self.public_port
 
     def _curl_json(self, url: str) -> dict:
         # check that curl is available

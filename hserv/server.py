@@ -97,7 +97,7 @@ class HydrocodeServer(object):
     def exists(self, path: str) -> bool:
         # create the remote wrapper
         res = self.run(f"python -c \"import os; print(os.path.exists('{path}'))\"", hide=True)
-        return bool(res.stdout)
+        return res.stdout == 'True'
 
     @property
     def cwd(self):
