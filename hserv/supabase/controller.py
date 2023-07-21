@@ -54,14 +54,14 @@ class SupabaseController(object):
             kong_port = self.server.get_free_port()
 
             # create a config file for the project
-            configBuf = io.StringIO(json.dumps(dict(
+            configBuf = io.BytesIO(json.dumps(dict(
                     public_url=self.public_url,
                     jwt_secret=secret,
                     postgres_password=pw,
                     public_port=self.public_port,
                     postgres_port=pg_port,
                     kong_port=kong_port,
-                )))
+                )).encode())
             self.server.put(configBuf, os.path.join(self.path, '.config'))
             
         # read from config
@@ -133,14 +133,14 @@ class SupabaseController(object):
     @property
     def config(self) -> dict:
         # load the config into memory
-        confBuf = io.StringIO()
+        confBuf = io.BytesIO()
         self.server.get(os.path.join(self.path, '.config'), confBuf)
-        return json.loads(confBuf.getvalue())
+        return json.loads(confBuf.getvalue().decode())
     
     @config.setter
     def config(self, value: dict):
         # load the config dict into a buffer object
-        confBuf = io.StringIO(json.dumps(value))
+        confBuf = io.BytesIO(json.dumps(value).encode())
 
         # put the config to the server
         self.server.put(confBuf, os.path.join(self.path, '.config'))
@@ -164,11 +164,11 @@ class SupabaseController(object):
     @property
     def is_configured(self):
         # get the env file
-        envBuf = io.StringIO()
+        envBuf = io.BytesIO()
         self.server.get(os.path.join(self.docker_path, '.env'), envBuf)
         
         # get the conf as string
-        conf = envBuf.getvalue()
+        conf = envBuf.getvalue().decode()
         
         # make sure the passwords match
         return self.pg_password in conf and self.jwt_secret in conf
