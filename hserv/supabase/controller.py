@@ -211,7 +211,7 @@ class SupabaseController(object):
         os.chdir(self.path)
 
         # run git to clone the supabase repo
-        self.server.run('git clone --depth https://github.com/supabase/supabase', hide=self.quiet)
+        self.server.run('git clone --depth 1 https://github.com/supabase/supabase', hide=self.quiet)
 
         # copy over the example env file
         src = os.path.join(self.docker_path, '.env.example')
