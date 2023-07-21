@@ -1,4 +1,4 @@
-from typing import Dict, List, Union, TYPE_CHECKING
+from typing import Any, Dict, List, Union, TYPE_CHECKING
 from dataclasses import dataclass, field
 import os
 import io
@@ -53,7 +53,7 @@ class SupabaseConfig:
         self.controller.server.put(envBuf, self._env_path)
         self.controller.server.put(kongBuf, self._kong_path)
 
-    def __getattr__(self, name: str):
+    def get(self, name: str, default: Any = 'raise'):
         # first check if name is in the lookup table
         if name in ENV_LOOKUP:
             names = ENV_LOOKUP[name]
@@ -66,17 +66,14 @@ class SupabaseConfig:
         # extract
         regex = re.search(r'%s=(.+)[\n\r]' % name, self._env)
         if regex is None:
-            raise AttributeError(f"Attriubte '{name}' is not a valid environment configuration value.")
+            if default == 'raise':
+                raise AttributeError(f"Attribute '{name}' is not a valid environment configuration value.")
+            else:
+                return default
         else:
             return regex.group(1)
-
-    def get(self, name: str, default=None):
-        try:
-            return getattr(self, name)
-        except AttributeError:
-            return default
     
-    def __setattr__(self, name: str, value: Union[str, int]):
+    def set(self, name: str, value: Union[str, int]):
         # make a list first
         if name in ENV_LOOKUP:
             names = ENV_LOOKUP[name]
@@ -85,8 +82,7 @@ class SupabaseConfig:
         
         # check that all names are in the env
         if not all([n in self._env for n in names]):
-            super().__setattr__(name, value)
-            return 
+            raise AttributeError(f"Attribute '{name}' is not a valid environment configuration value.")
         
         # still here means replace the config
         env = self._env

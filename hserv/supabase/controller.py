@@ -220,37 +220,42 @@ class SupabaseController(object):
         # update the postgres password
         if postgres:
             # set the password
-            conf.pg_password = self.pg_password
-            conf.pg_port = self.pg_port
+            conf.set('pg_password',  self.pg_password)
+            conf.set('pg_port', self.pg_port)
         
         # update the jwt secret
         if jwt:
             # replace jwt secret
-            conf.jwt_secret = self.jwt_secret
+            conf.set('jwt_secret',  self.jwt_secret)
 
             # repalce the api keys in the environment file
-            conf.anon_jwt = self.generate_jwt('anon')
-            conf.service_jwt = self.generate_jwt('service_role')
+            conf.set('anon_jwt', self.generate_jwt('anon'))
+            conf.set('service_jwt', self.generate_jwt('service_role'))
+
+            # extract the kong config directly, there is no better way as of now
+            kong = conf._kong
 
             # replace the keys in the API config
-            kong = conf._kong
             anon = [c for c in kong['consumers'] if c['username'] == 'anon'][0]
             anon['keyauth_credentials'] = [{"key": self.generate_jwt('anon')}]
 
             service = [c for c in kong['consumers'] if c['username'] == 'service_role'][0]
             service['keyauth_credentials'] = [{"key": self.generate_jwt('service_role')}]
             kong['consumers'] = [anon, service]
+
+            # save kong config back to the config object
+            conf._kong = kong
         
         if domain:
             # replace the domain
-            conf.site_url = self.site_url
+            conf.set('site_url',self.site_url)
 
             # replace API url
-            conf.api_url = f"{self.public_url}:{self.kong_port}"
+            conf.set('api_url', f"{self.public_url}:{self.kong_port}")
 
             # replace ports
-            conf.api_port = self.kong_port
-            conf.public_port = self.public_port
+            conf.set('api_port', self.kong_port)
+            conf.set('public_port', self.public_port)
         
         # finally save the config
         conf.save()
