@@ -251,6 +251,9 @@ class SupabaseController(object):
             # replace ports
             conf.api_port = self.kong_port
             conf.public_port = self.public_port
+        
+        # finally save the config
+        conf.save()
 
     def _curl_json(self, url: str) -> dict:
         # check that curl is available
