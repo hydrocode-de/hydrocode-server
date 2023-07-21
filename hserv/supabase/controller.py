@@ -27,7 +27,7 @@ class SupabaseController(object):
     pg_port: int = field(init=False, repr=False)
 
     # development only, this will be configured later, and derived from the project
-    public_url: str = field(default="http://localhost")
+    public_url: str = field(default="localhost")
     public_port: int = field(default=3000, repr=False)
     kong_port: int = field(init=False, repr=False)
 
