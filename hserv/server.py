@@ -42,7 +42,7 @@ class HydrocodeServer(object):
     def put(self):
         # create a remote wrapper
         def _put(*args, **kwargs):
-            with Connection(self.connection) as con:
+            with Connection(self.connection, user=self.username) as con:
                 return con.put(*args, **kwargs)
         
         def _put_local(local: Union[str, io.IOBase], remote: Optional[str] = None):
@@ -71,7 +71,7 @@ class HydrocodeServer(object):
     def get(self):
         # create a remote wrapper
         def _get(*args, **kwargs):
-            with Connection(self.connection) as con:
+            with Connection(self.connection, user=self.username) as con:
                 return con.get(*args, **kwargs)
         
         def _get_local(remote: str, local: Optional[Union[str, io.IOBase]] = None):
@@ -129,7 +129,7 @@ class HydrocodeServer(object):
         info = dict(
             git_version=self._extract_semver('git --version'),
             docker_version=self._extract_semver('docker --version'),
-            nginx_version=self._extract_semver('nginx -v'),
+            nginx_version=self._extract_semver('nginx -v 2>&1'),
             certbot_version=self._extract_semver('certbot --version'),
             curl_version=self._extract_semver('curl --version'),
         )
@@ -152,7 +152,13 @@ class HydrocodeServer(object):
             from hserv.supabase.controller import SupabaseController
 
             # update the kwargs
-            kwargs['public_url'] = self.connection
+            kwargs.setdefault('public_url', self.connection)
+            kwargs.setdefault('path', self.cwd)
+
+            # always overwrite the server reference
+            kwargs['server'] = self
+
+            # instantiate the controller
             controller = SupabaseController(project, **kwargs)
 
             # cache the controller
