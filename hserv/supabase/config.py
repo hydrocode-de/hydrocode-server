@@ -10,14 +10,14 @@ if TYPE_CHECKING:
 
 
 ENV_LOOKUP: Dict[str, List[str]] = dict(
-    pg_password=["POSTGRES_PASSWORD"],
+    postgres_password=["POSTGRES_PASSWORD"],
     jwt_secret=["JWT_SECRET"],
     anon_jwt=["ANON_KEY"],
     service_jwt=["SERVICE_ROLE_KEY"],
     public_url=["SITE_URL"],
     site_url=["SITE_URL"],
     api_url=["SUPABASE_PUBLIC_URL", "API_EXTERNAL_URL"],
-    pg_port=["POSTGRES_PORT"],
+    postgres_port=["POSTGRES_PORT"],
     public_port=["STUDIO_PORT"],
     api_port=["KONG_HTTP_PORT"],
 )

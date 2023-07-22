@@ -23,8 +23,8 @@ class SupabaseController(object):
     quiet: bool = field(default=False, repr=False)
     jwt_secret: str = field(init=False, repr=False)
 
-    pg_password: str = field(init=False, repr=False)
-    pg_port: int = field(init=False, repr=False)
+    postgres_password: str = field(init=False, repr=False)
+    postgres_port: int = field(init=False, repr=False)
 
     # development only, this will be configured later, and derived from the project
     public_url: str = field(default="localhost")
@@ -151,8 +151,8 @@ class SupabaseController(object):
 
         # sync the settings
         self.jwt_secret = config['jwt_secret']
-        self.pg_password = config['postgres_password']
-        self.pg_port = config['postgres_port']
+        self.postgres_password = config['postgres_password']
+        self.postgres_port = config['postgres_port']
         self.kong_port = config['kong_port']
         self.public_port = config['public_port']
 
@@ -171,7 +171,7 @@ class SupabaseController(object):
         conf = envBuf.getvalue().decode()
         
         # make sure the passwords match
-        return self.pg_password in conf and self.jwt_secret in conf
+        return self.postgres_password in conf and self.jwt_secret in conf
 
     @property
     def site_url(self):
@@ -220,8 +220,8 @@ class SupabaseController(object):
         # update the postgres password
         if postgres:
             # set the password
-            conf.set('pg_password',  self.pg_password)
-            conf.set('pg_port', self.pg_port)
+            conf.set('postgres_password',  self.postgres_password)
+            conf.set('postgres_port', self.postgres_port)
         
         # update the jwt secret
         if jwt:
