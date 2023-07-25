@@ -16,6 +16,13 @@ class NginxProxy(WebProxy):
         # initialize a new config
         if conf is None:
             conf = nginx.Conf()
+
+        # map the connection_upgrade
+        conf.add(nginx.Map(
+            '$http_upgrade $connection_upgrade',
+            nginx.Key('default', 'upgrade'),
+            nginx.Key("''", 'close'),
+        ))
         
         # create the two upsreams for supabase and kong
         conf.add(nginx.Upstream('supabase', nginx.Key('server', f"localhost:{supabase.public_port}")))
@@ -34,7 +41,7 @@ class NginxProxy(WebProxy):
                 '~ ^/rest/v1/(.*)$',
                 nginx.Key('proxy_set_header', 'Host $host'),
                 nginx.Key('proxy_pass', 'http://kong'),
-                nginx.Key('redirect', 'off')
+                nginx.Key('proxy_redirect', 'off')
             ),
 
             # add the AUTH location
@@ -42,13 +49,13 @@ class NginxProxy(WebProxy):
                 '~ ^/auth/v1/(.*)$',
                 nginx.Key('proxy_set_header', 'Host $host'),
                 nginx.Key('proxy_pass', 'http://kong'),
-                nginx.Key('redirect', 'off')
+                nginx.Key('proxy_redirect', 'off')
             ),
 
             # add the REALTIME location
             nginx.Location(
                 '~ ^/realtime/v1/(.*)$',
-                nginx.Key('redirect', 'off'),
+                nginx.Key('proxy_redirect', 'off'),
                 nginx.Key('proxy_pass', 'http://kong'),
                 nginx.Key('proxy_http_version', '1.1'),
                 nginx.Key('proxy_set_header', 'Upgrade $http_upgrade'),
@@ -61,7 +68,7 @@ class NginxProxy(WebProxy):
                 '/',
                 nginx.Key('proxy_set_header', 'Host $host'),
                 nginx.Key('proxy_pass', 'http://supabase'),
-                nginx.Key('redirect', 'off'),
+                nginx.Key('proxy_redirect', 'off'),
                 nginx.Key('proxy_set_header', 'Upgrade $http_upgrade')
             ),
         )
@@ -91,12 +98,14 @@ class NginxProxy(WebProxy):
             self.server.run(f"mkdir -p {config_path}")
         
         # dump the config
-        confBuf = io.BytesIO()
-        nginx.dump(conf, confBuf)
+        confBuf = io.BytesIO(nginx.dumps(conf).encode())
+        confBuf.seek(0)
         self.server.put(confBuf, os.path.join(config_path, f'{domain}.conf'))
 
         # symlink the config to sites-enabled
-        self.server.run(f"ln -s {os.path.join(config_path, f'{domain}.conf')} {os.path.join(self.base_path, 'sites-enabled', f'{domain}.conf')}")
+        src = os.path.join(config_path, f'{domain}.conf')
+        dst = os.path.join(self.base_path, 'sites-enabled', f'{domain}.conf')
+        self.server.run(f"ln -s {src if src.startswith('/') else '/%s' % src} {dst if dst.startswith('/') else '/%s' % dst}")
 
     def remove_site_link(self, name: str, remove_config: bool = False) -> None:
         # get a supabase controller
