@@ -28,7 +28,7 @@ class SupabaseController(object):
 
     # development only, this will be configured later, and derived from the project
     public_url: str = field(default="localhost")
-    public_port: int = field(default=3000, repr=False)
+    public_port: int = field(init=False, repr=False)
     kong_port: int = field(init=False, repr=False)
 
     def __post_init__(self):      
@@ -52,13 +52,14 @@ class SupabaseController(object):
             # get free ports for postgres and kong
             pg_port = self.server.get_free_port()
             kong_port = self.server.get_free_port()
+            public_port = 3000 if 'localhost' in self.public_url else self.server.get_free_port()
 
             # create a config file for the project
             configBuf = io.BytesIO(json.dumps(dict(
                     public_url=self.public_url,
                     jwt_secret=secret,
                     postgres_password=pw,
-                    public_port=self.public_port,
+                    public_port=public_port,
                     postgres_port=pg_port,
                     kong_port=kong_port,
                 )).encode())
@@ -82,7 +83,13 @@ class SupabaseController(object):
         # stop the compose project
         self.server.run(f"cd {self.docker_path}; docker compose down", hide=self.quiet)
 
-    def setup(self, public_port: Optional[int] = None, kong_port: Optional[int] = None, postgres_port: Optional[int] = None):
+    def setup(
+            self,
+            public_port: Optional[int] = None,
+            kong_port: Optional[int] = None,
+            postgres_port: Optional[int] = None,
+            webserver: Union[Literal[False], Union[Literal['nginx'], Literal['apache']]] = 'nginx'
+        ):
         # if not downloaded, do that
         if not self.is_downloaded:
             self.download()
@@ -102,6 +109,10 @@ class SupabaseController(object):
 
         # after download, update the settings
         self.update_supabase_config(jwt=True, postgres=True, domain=True)
+
+        # setup the webproxy
+        if webserver:
+            self.setup_webproxy(type=webserver)
 
     def update(self, rewrite_config=False):
         # check that git is installed
