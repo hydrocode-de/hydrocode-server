@@ -260,6 +260,16 @@ class SupabaseController(object):
         # finally save the config
         conf.save()
 
+    def setup_webproxy(self, type: Union[Literal['nginx'], Literal['apache']] = 'nginx') -> None:
+        # get the webproxy controller
+        webproxy = self.server.webproxy(self.project, type=type)
+
+        # create the subdomain
+        webproxy.new_site_link(self.project, domain=self.public_url)
+
+        # reload the server
+        webproxy.reload()
+
     def _curl_json(self, url: str) -> dict:
         # check that curl is available
         if self.server.info.get('curl_version', 'unknown') == 'unknown':
