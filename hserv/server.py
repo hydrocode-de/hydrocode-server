@@ -1,4 +1,5 @@
-from typing import Union, Optional, cast, Dict, Any, TYPE_CHECKING
+from typing import Union, Optional, cast, Dict, Any, Union, TYPE_CHECKING
+from typing_extensions import Literal
 from dataclasses import dataclass, field
 import re
 import io
@@ -9,12 +10,15 @@ from fabric import Connection, Result
 
 if TYPE_CHECKING:
     from hserv.supabase.controller import SupabaseController
+    from hserv.webproxy.proxy import WebProxy
 
 @dataclass
 class HydrocodeServer(object):
     connection: str = 'localhost'
     username: Optional[str] = None
+    
     _supabase_projects: Dict[str, 'SupabaseController'] = field(default_factory=dict, init=False)
+    _webproxy_projects: Dict[str, 'WebProxy'] = field(default_factory=dict, init=False)
 
     @property
     def run(self):
@@ -166,3 +170,27 @@ class HydrocodeServer(object):
 
             # return
             return controller
+
+    def webproxy(self, project: str, type: Union[Literal['nginx'], Literal['apache']]) -> 'WebProxy':
+        # check if we have an instance of that project
+        if project in self._webproxy_projects:
+            return self._webproxy_projects[project]
+
+        # initialize a new supabase controller
+        if type == 'nginx':
+            from hserv.webproxy.nginx import NginxProxy as Proxy
+            base_path = 'etc/nginx'
+        elif type == 'apache':
+            raise NotImplementedError("Apache is not yet supported.")
+            base_path = 'etc/apache2'
+        else:
+            raise ValueError(f"Unknown webproxy type: {type}")
+
+        # instantiate the controller
+        proxy = Proxy(server=self, base_path=base_path)
+
+        # cache the instance
+        self._webproxy_projects[project] = proxy
+
+        # return
+        return proxy
