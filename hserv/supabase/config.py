@@ -22,6 +22,12 @@ ENV_LOOKUP: Dict[str, List[str]] = dict(
     api_port=["KONG_HTTP_PORT"],
     organization=["STUDIO_DEFAULT_ORGANIZATION"],
     project=["STUDIO_DEFAULT_PROJECT"],
+    smtp_mail=["SMTP_ADMIN_EMAIL"],
+    smtp_host=["SMTP_HOST"],
+    smtp_port=["SMTP_PORT"],
+    smtp_user=["SMTP_USER"],
+    smtp_password=["SMTP_PASS"],
+    smtp_name=["SMTP_SENDER_NAME"],
 )
 
 @dataclass
