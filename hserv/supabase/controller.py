@@ -1,4 +1,4 @@
-from typing import Union, Optional
+from typing import Union, Optional, List
 from typing_extensions import Literal
 from dataclasses import dataclass, field
 import os
@@ -196,12 +196,12 @@ class SupabaseController(object):
         self.studio_project = config.get('studio_project', self.project)
 
     @property
-    def is_downloaded(self):
+    def is_downloaded(self) -> bool:
         # check if the supabase docker folder exists
         return self.server.exists(os.path.join(self.path, 'supabase', 'docker'))
     
     @property
-    def is_configured(self):
+    def is_configured(self) -> bool:
         # get the env file
         envBuf = io.BytesIO()
         self.server.get(os.path.join(self.docker_path, '.env'), envBuf)
@@ -211,6 +211,23 @@ class SupabaseController(object):
         
         # make sure the passwords match
         return self.postgres_password in conf and self.jwt_secret in conf
+
+    def container(self) -> List[dict]:
+        # get all containers
+        all_container = json.loads(self.server.run(f"cd {self.docker_path}; docker compose ps --format json -a", hide=True).stdout)
+
+        return all_container
+        
+    @property
+    def is_running(self) -> bool:
+        # count the total number of containers associated to this project
+        all_container = self.container()
+        
+        # count running containers
+        running = [c for c in all_container if c['State'] == 'running']
+
+        # if all are running, and there are more than one, everything is fine
+        return len(running) == len(all_container) and len(all_container) > 1
 
     @property
     def site_url(self):
@@ -346,9 +363,15 @@ class SupabaseController(object):
         # check if the project is downloaded
         if not self.is_downloaded:
             self.setup()
+
+        # otherwise, check if the project is configured
         elif not self.is_configured:
             self.update_supabase_config(jwt=True, postgres=True, domain=True)
         
-        # TODO change here then
+        # check if the project is running
+        elif not self.is_running:
+            self.start()
+
+        # otherwise, get some statistics
         else:
-            return self.health()
+            return self.stats()
