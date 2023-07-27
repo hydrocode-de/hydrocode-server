@@ -132,7 +132,7 @@ class HydrocodeServer(object):
             return self.wd
 
     def cp(self, src: str, dst: str):
-        self.run(f"cp {src} {dst}", hide='hide')
+        self.run(f"cp {src} {dst}", hide='both')
 
     def _extract_semver(self, command: str) -> str:
         # get git version
