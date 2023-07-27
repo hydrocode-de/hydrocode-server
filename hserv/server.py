@@ -103,20 +103,36 @@ class HydrocodeServer(object):
         else:
             return _get                
 
+    @property
+    def sourcefile(self):
+        # check if the current path has a .bashrc or .zshrc
+        contents = self.run(f"cd {self.cwd}; ls -a", hide='both').stdout.splitlines()
+        if '.bashrc' in contents:
+            source = f'source {self.cwd}/.bashrc;'
+        elif '.zshrc' in contents:
+            source = f'source {self.cwd}/.zshrc;'
+        else:
+            source = ''
+        
+        return source
+
     def exists(self, path: str) -> bool:
+        # python might need to source a userconfig file
+        source = self.sourcefile
+
         # create the remote wrapper
-        res = self.run(f"cd {self.cwd}; python -c \"import os; print(os.path.exists('{path}'))\"", hide=True)
+        res = self.run(f"cd {self.cwd}; {source} python -c \"import os; print(os.path.exists('{path}'))\"", hide=True)
         return res.stdout.strip() == 'True'
 
     @property
     def cwd(self):
         if self.wd is None:
-            return self.run("pwd", hide=True).stdout.strip()
+            return self.run("pwd", hide='both').stdout.strip()
         else:
             return self.wd
 
     def cp(self, src: str, dst: str):
-        self.run(f"cp {src} {dst}", hide=True)
+        self.run(f"cp {src} {dst}", hide='hide')
 
     def _extract_semver(self, command: str) -> str:
         # get git version
