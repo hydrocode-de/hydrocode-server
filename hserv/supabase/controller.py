@@ -27,6 +27,7 @@ class SupabaseController(object):
     anon_jwt: str = field(init=False, repr=False)
     service_jwt: str = field(init=False, repr=False)
 
+    # postgres
     postgres_password: str = field(init=False, repr=False)
     postgres_port: int = field(init=False, repr=False)
 
@@ -34,6 +35,10 @@ class SupabaseController(object):
     public_url: str = field(default="localhost")
     public_port: int = field(init=False, repr=False)
     kong_port: int = field(init=False, repr=False)
+
+    # studio settings
+    studio_organization: str = field(init=False, repr=False)
+    studio_project: str = field(init=False, repr=False)
 
     def __post_init__(self):      
         # check that the project is added to the path
@@ -186,6 +191,10 @@ class SupabaseController(object):
         self.kong_port = config['kong_port']
         self.public_port = config['public_port']
 
+        # sync some optional settings
+        self.studio_organization = config.get('studio_organization', 'Hydrocode GmbH')
+        self.studio_project = config.get('studio_project', self.project)
+
     @property
     def is_downloaded(self):
         # check if the supabase docker folder exists
@@ -256,6 +265,10 @@ class SupabaseController(object):
     def update_supabase_config(self, jwt=False, postgres=False, domain=False):
         # instantiate a Config object
         conf = SupabaseConfig(self)
+
+        # set general settings
+        conf.set('organization', self.studio_organization)
+        conf.set('project', self.studio_project)
         
         # update the postgres password
         if postgres:

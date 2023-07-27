@@ -20,6 +20,8 @@ ENV_LOOKUP: Dict[str, List[str]] = dict(
     postgres_port=["POSTGRES_PORT"],
     public_port=["STUDIO_PORT"],
     api_port=["KONG_HTTP_PORT"],
+    organization=["STUDIO_DEFAULT_ORGANIZATION"],
+    project=["STUDIO_DEFAULT_PROJECT"],
 )
 
 @dataclass
