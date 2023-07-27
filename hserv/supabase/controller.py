@@ -198,6 +198,13 @@ class SupabaseController(object):
         else:
             return f"{self.public_url}:{self.public_port}"
 
+    @property
+    def protocol(self):
+        if 'localhost' in self.public_url:
+            return 'http://'
+        else:
+            return 'https://'
+
     def download(self):
         # first verify that git is installed
         if self.server.info.get('git_version', 'unknown') == 'unknown':
@@ -266,7 +273,7 @@ class SupabaseController(object):
         
         if domain:
             # replace the domain
-            conf.set('site_url',self.site_url)
+            conf.set('site_url', self.site_url)
 
             # replace API url
             conf.set('api_url', f"{self.public_url}:{self.kong_port}")
