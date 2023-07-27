@@ -141,6 +141,13 @@ class SupabaseController(object):
         # remove the path
         self.server.run(f"rm -rf {self.path}")
 
+    def stats(self) -> dict:
+        # capture docker stats
+        txt = self.server.run(f"{self.server.sourcefile} cd {self.server.cwd};" + 'docker stats --no-stream --format "{{ json . }}"', hide='both').stdout
+        raw = [json.loads(line) for line in txt.splitlines()]
+
+        return {container['Name']: container for container in raw}
+
     @property
     def config(self) -> dict:
         # load the config into memory
