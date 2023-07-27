@@ -33,6 +33,11 @@ class SupabaseConfig:
         self._env_path = os.path.join(self.controller.docker_path, ".env")
         self._kong_path = os.path.join(self.controller.docker_path, 'volumes', 'api', 'kong.yml')
         
+        # if the .env file does not exist, but the default does, copy it
+        default_env = os.path.join(self.controller.docker_path, '.env.example')
+        if not self.controller.server.exists(self._env_path) and self.controller.server.exists(default_env):
+            self.controller.server.cp(default_env, self._env_path)
+
         # create buffers for the config
         envBuf = io.StringIO()
         kongBuf = io.StringIO()
