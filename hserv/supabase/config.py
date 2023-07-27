@@ -38,6 +38,7 @@ class SupabaseConfig:
         # load the config into buffer
         self.controller.server.get(self._env_path, envBuf)
         self.controller.server.get(self._kong_path, kongBuf)
+        envBuf.seek(0)
         kongBuf.seek(0)
 
         # set as attributes
@@ -49,6 +50,10 @@ class SupabaseConfig:
         envBuf = io.StringIO(self._env)
         kongBuf = io.StringIO()
         yaml.dump(self._kong, kongBuf)
+
+        # seek to the beginning
+        envBuf.seek(0)
+        kongBuf.seek(0)
 
         # send to the server
         self.controller.server.put(envBuf, self._env_path)
@@ -90,7 +95,7 @@ class SupabaseConfig:
         for n in names:
             # get the current value
             current_val = self.get(n)
-            env.replace(f"{n}={current_val}", f"{n}={value}")
+            env = env.replace(f"{n}={current_val}", f"{n}={value}")
         
         # finally set the new env
         self._env = env
