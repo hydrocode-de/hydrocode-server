@@ -20,4 +20,3 @@ class WebProxy(abc.ABC):
     @abc.abstractmethod
     def reload(self) -> None:
         pass
-
