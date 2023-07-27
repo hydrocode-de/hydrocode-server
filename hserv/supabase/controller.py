@@ -21,7 +21,11 @@ class SupabaseController(object):
     docker_path: str = field(init=False, repr=False)
     server: HydrocodeServer = field(default_factory=HydrocodeServer, repr=False)
     quiet: bool = field(default=False, repr=False)
+
+    # jwt stuff
     jwt_secret: str = field(init=False, repr=False)
+    anon_jwt: str = field(init=False, repr=False)
+    service_jwt: str = field(init=False, repr=False)
 
     postgres_password: str = field(init=False, repr=False)
     postgres_port: int = field(init=False, repr=False)
@@ -54,6 +58,10 @@ class SupabaseController(object):
             kong_port = self.server.get_free_port()
             public_port = 3000 if 'localhost' in self.public_url else self.server.get_free_port()
 
+            # create jwt for anonymous and admin access
+            anon_jwt = self.generate_jwt('anon', secret)
+            service_jwt = self.generate_jwt('service_role', secret)
+
             # create a config file for the project
             configBuf = io.BytesIO(json.dumps(dict(
                     public_url=self.public_url,
@@ -62,6 +70,8 @@ class SupabaseController(object):
                     public_port=public_port,
                     postgres_port=pg_port,
                     kong_port=kong_port,
+                    anon_jwt=anon_jwt,
+                    service_jwt=service_jwt
                 )).encode())
             self.server.put(configBuf, os.path.join(self.path, '.config'))
             
@@ -169,6 +179,8 @@ class SupabaseController(object):
 
         # sync the settings
         self.jwt_secret = config['jwt_secret']
+        self.anon_jwt = config['anon_jwt']
+        self.service_jwt = config['service_jwt']
         self.postgres_password = config['postgres_password']
         self.postgres_port = config['postgres_port']
         self.kong_port = config['kong_port']
@@ -227,14 +239,17 @@ class SupabaseController(object):
         if not self.quiet:
             print(f"Supabase downloaded.\nCreated config file at: {dst}")
 
-    def generate_jwt(self, role: Union[Literal['anon'], Literal['service_role']]) -> str:
+    def generate_jwt(self, role: Union[Literal['anon'], Literal['service_role']], secret: Optional[str] = None) -> str:
+        # check if we should use the default secret
+        secret = secret or self.jwt_secret
+
         # create the payload
         payload = dict(role=role, iss='supabase', iat=1689717600, exp=1847570400)
 
         # create headers
         headers = dict(alg='HS256', typ='JWT')
 
-        encoded_jwt = jwt.encode(payload, self.jwt_secret, algorithm='HS256', headers=headers)
+        encoded_jwt = jwt.encode(payload, secret, algorithm='HS256', headers=headers)
 
         return encoded_jwt
 
@@ -254,18 +269,18 @@ class SupabaseController(object):
             conf.set('jwt_secret',  self.jwt_secret)
 
             # repalce the api keys in the environment file
-            conf.set('anon_jwt', self.generate_jwt('anon'))
-            conf.set('service_jwt', self.generate_jwt('service_role'))
+            conf.set('anon_jwt', self.anon_jwt)
+            conf.set('service_jwt', self.service_jwt)
 
             # extract the kong config directly, there is no better way as of now
             kong = conf._kong
 
             # replace the keys in the API config
             anon = [c for c in kong['consumers'] if c['username'] == 'anon'][0]
-            anon['keyauth_credentials'] = [{"key": self.generate_jwt('anon')}]
+            anon['keyauth_credentials'] = [{"key": self.anon_jwt}]
 
             service = [c for c in kong['consumers'] if c['username'] == 'service_role'][0]
-            service['keyauth_credentials'] = [{"key": self.generate_jwt('service_role')}]
+            service['keyauth_credentials'] = [{"key": self.service_jwt}]
             kong['consumers'] = [anon, service]
 
             # save kong config back to the config object
